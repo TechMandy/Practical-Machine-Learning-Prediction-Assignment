@@ -1,0 +1,260 @@
+Practicle Machine learning project - personal activity prediction
+introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+Data
+
+The training data for this project are available here:
+  
+  https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+  
+  https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+
+The data can be downloaded using the below R script.
+
+downloadFiles<-function(
+  dataURL="", destF="t.csv"
+){
+  if(!file.exists(destF)){
+    download.file(dataURL, destF, method="curl")
+  }else{
+    message("data already downloaded.")
+  }
+}
+
+loading training and testing dataset
+
+trainURL<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testURL <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+downloadFiles(trainURL, "pml-training.csv")
+
+## data already downloaded.
+
+downloadFiles(testURL, "pml-test.csv")
+
+## data already downloaded.
+
+training <- read.csv("C:/Users/Mandeep/Desktop/My studies/Data Science/8-Practical Machine Learning/P-3/submit/pml-training.csv", header = TRUE, sep =",", na.strings= c("NA",""," "))
+testing <-read.csv("C:/Users/Mandeep/Desktop/My studies/Data Science/8-Practical Machine Learning/P-3/submit/pml-testing-1.csv", header = TRUE, sep = ",", na.strings= c("NA",""," "))
+
+First look of training data
+
+dim(training)
+
+## [1] 19622   160
+
+#str(training)
+
+The outcome is "classe" variable
+
+table(training$classe)
+
+## 
+##    A    B    C    D    E 
+## 5580 3797 3422 3216 3607
+
+The train dataset has 160 variables 19622 observations.
+remove missing values, is.na() or ""
+
+var <- names(training)[apply(training,2,function(x) table(is.na(x))[1]==19622)]   
+train2<- training[,var]
+test2 <- testing[,c(var[-length(var)],names(testing)[length(testing)])] # test dataset no classe variable
+
+discards unuseful predictors
+
+Only considering numeric variable from HAR sensor
+
+removeIndex <- grep("timestamp|X|user_name|new_window|num_window",names(train2))
+train3 <- train2[,-c(removeIndex, length(train2))]
+test3  <- test2[,-c(removeIndex, length(test2))]
+
+Check the near Zero covariates and correlation matrix
+
+removing zero covariates
+
+library(caret)
+
+## Loading required package: lattice
+## Loading required package: ggplot2
+
+nzv <- nearZeroVar(train3, saveMetrics=TRUE)
+nzv
+
+##                      freqRatio percentUnique zeroVar   nzv
+## roll_belt                1.102        6.7781   FALSE FALSE
+## pitch_belt               1.036        9.3772   FALSE FALSE
+## yaw_belt                 1.058        9.9735   FALSE FALSE
+## total_accel_belt         1.063        0.1478   FALSE FALSE
+## gyros_belt_x             1.059        0.7135   FALSE FALSE
+## gyros_belt_y             1.144        0.3516   FALSE FALSE
+## gyros_belt_z             1.066        0.8613   FALSE FALSE
+## accel_belt_x             1.055        0.8358   FALSE FALSE
+## accel_belt_y             1.114        0.7288   FALSE FALSE
+## accel_belt_z             1.079        1.5238   FALSE FALSE
+## magnet_belt_x            1.090        1.6665   FALSE FALSE
+## magnet_belt_y            1.100        1.5187   FALSE FALSE
+## magnet_belt_z            1.006        2.3290   FALSE FALSE
+## roll_arm                52.338       13.5256   FALSE FALSE
+## pitch_arm               87.256       15.7323   FALSE FALSE
+## yaw_arm                 33.029       14.6570   FALSE FALSE
+## total_accel_arm          1.025        0.3364   FALSE FALSE
+## gyros_arm_x              1.016        3.2769   FALSE FALSE
+## gyros_arm_y              1.454        1.9162   FALSE FALSE
+## gyros_arm_z              1.111        1.2639   FALSE FALSE
+## accel_arm_x              1.017        3.9598   FALSE FALSE
+## accel_arm_y              1.140        2.7367   FALSE FALSE
+## accel_arm_z              1.128        4.0363   FALSE FALSE
+## magnet_arm_x             1.000        6.8240   FALSE FALSE
+## magnet_arm_y             1.057        4.4440   FALSE FALSE
+## magnet_arm_z             1.036        6.4468   FALSE FALSE
+## roll_dumbbell            1.022       84.2065   FALSE FALSE
+## pitch_dumbbell           2.277       81.7450   FALSE FALSE
+## yaw_dumbbell             1.132       83.4828   FALSE FALSE
+## total_accel_dumbbell     1.073        0.2191   FALSE FALSE
+## gyros_dumbbell_x         1.003        1.2282   FALSE FALSE
+## gyros_dumbbell_y         1.265        1.4168   FALSE FALSE
+## gyros_dumbbell_z         1.060        1.0498   FALSE FALSE
+## accel_dumbbell_x         1.018        2.1659   FALSE FALSE
+## accel_dumbbell_y         1.053        2.3749   FALSE FALSE
+## accel_dumbbell_z         1.133        2.0895   FALSE FALSE
+## magnet_dumbbell_x        1.098        5.7486   FALSE FALSE
+## magnet_dumbbell_y        1.198        4.3013   FALSE FALSE
+## magnet_dumbbell_z        1.021        3.4451   FALSE FALSE
+## roll_forearm            11.589       11.0896   FALSE FALSE
+## pitch_forearm           65.983       14.8558   FALSE FALSE
+## yaw_forearm             15.323       10.1468   FALSE FALSE
+## total_accel_forearm      1.129        0.3567   FALSE FALSE
+## gyros_forearm_x          1.059        1.5187   FALSE FALSE
+## gyros_forearm_y          1.037        3.7764   FALSE FALSE
+## gyros_forearm_z          1.123        1.5646   FALSE FALSE
+## accel_forearm_x          1.126        4.0465   FALSE FALSE
+## accel_forearm_y          1.059        5.1116   FALSE FALSE
+## accel_forearm_z          1.006        2.9559   FALSE FALSE
+## magnet_forearm_x         1.012        7.7668   FALSE FALSE
+## magnet_forearm_y         1.247        9.5403   FALSE FALSE
+## magnet_forearm_z         1.000        8.5771   FALSE FALSE
+
+nzv[nzv$nzv,]
+
+## [1] freqRatio     percentUnique zeroVar       nzv          
+## <0 rows> (or 0-length row.names)
+
+Remove highly correlated covariates.
+
+corrM <- cor(train3)
+library(corrplot)
+corrplot(corrM, method="circle",tl.cex=0.5)
+
+plot of chunk checkCorrelation
+
+highCorr <- findCorrelation(corrM, cutoff = .75)     # high correlation
+train4<-cbind(classe=train2$classe,train3[,-highCorr])    
+test4 <- test3[, -highCorr]        # dataframe of test predictors
+
+Split training dataset into training/testing for model evaulation
+
+set.seed(1234)
+inTrain = createDataPartition(train4$classe, p = 3/4)[[1]]
+trainPart = train4[ inTrain,]
+testPart =  train4[-inTrain,]
+
+Random Forest algorithm to predict.
+
+library(randomForest)
+
+## randomForest 4.6-7
+## Type rfNews() to see new features/changes/bug fixes.
+
+rfModel <- randomForest(classe ~ .,data = trainPart,importance = TRUE,ntrees = 500)
+print(rfModel)
+
+## 
+## Call:
+##  randomForest(formula = classe ~ ., data = trainPart, importance = TRUE,      ntrees = 500) 
+##                Type of random forest: classification
+##                      Number of trees: 500
+## No. of variables tried at each split: 5
+## 
+##         OOB estimate of  error rate: 0.63%
+## Confusion matrix:
+##      A    B    C    D    E class.error
+## A 4181    3    0    0    1   0.0009558
+## B   12 2828    5    1    2   0.0070225
+## C    0   13 2535   19    0   0.0124659
+## D    0    0   24 2383    5   0.0120232
+## E    0    0    2    6 2698   0.0029564
+
+par(mar=c(3,4,4,4))                               
+plot(rfModel)  
+
+plot of chunk randomForest
+
+varImpPlot(rfModel,cex=.5)  
+
+plot of chunk randomForest
+Test sample and cross validation
+
+out.test<-predict(rfModel,testPart) 
+table(testData$classe, out.test)
+
+## Error: object 'testData' not found
+
+out.test<-predict(rfModel,test4) 
+out.test[1:20]
+
+##  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 
+##  B  A  B  A  A  E  D  B  A  A  B  C  B  A  E  E  A  B  B  B 
+## Levels: A B C D E
+
+k fold cross validataion, which takes too much computing time
+PCA with threshold 0.80, two misclassified in the first 20.
+
+preProc <- preProcess(trainPart[,-1], method="pca", thresh=0.8)
+trainPC <- predict(preProc, trainPart[,-1])
+#modPC <- train(trainPart$classe~., method="rf", data=trainPC)
+modPC <- randomForest(trainPart$classe~., data=trainPC, importance=TRUE, ntree=10)
+
+testPC <- predict(preProc, testPart[,-1])
+out.testPC<-predict(modPC, newdata=testPC)
+table(out.testPC, testPart$classe)
+
+##           
+## out.testPC    A    B    C    D    E
+##          A 1343   36   13    8    5
+##          B   26  877   20    5   13
+##          C   13   23  785   45   15
+##          D    6    7   30  737   16
+##          E    7    6    7    9  852
+
+testPC <- predict(preProc, test4)
+out.testPC<-predict(modPC, newdata=testPC)
+
+out.testPC[1:20]  # the 1st and 3rd mis-classified
+
+##  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 
+##  A  A  C  A  A  E  D  B  A  A  B  C  B  A  E  E  A  B  B  B 
+## Levels: A B C D E
+
+out.test[1:20]==out.testPC[1:20]
+
+##  [1] FALSE  TRUE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+## [12]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+
+saving the output
+
+answers<- as.vector(out.test[1:20])
+#answers = rep("A", 20)
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(answers)
